@@ -1,5 +1,5 @@
 // Pure helpers for expanding recurring transactions and computing balances
-// across multiple accounts, with monthly compounding for savings accounts.
+// across multiple accounts, with monthly compounding for savings/investment accounts.
 
 export const FREQUENCIES = ['none', 'weekly', 'biweekly', 'monthly', 'yearly'];
 
@@ -68,7 +68,7 @@ export const balanceAt = (account, allTransactions, date) => {
   const txns = allTransactions.filter((t) => t.accountId === account.id);
   const target = toDate(date);
   const today = toDate(new Date());
-  const apy = account.type === 'savings' ? Number(account.apy) || 0 : 0;
+  const apy = Number(account.apy) || 0;
   const monthlyRate = apy / 12;
   const initial = Number(account.initialBalance) || 0;
 
@@ -79,14 +79,17 @@ export const balanceAt = (account, allTransactions, date) => {
 
   let balance = initial;
   let cursor = today;
+  const todayMonthEnd = endOfMonth(today);
   for (let i = 0; i < 600; i += 1) {
     const monthEnd = endOfMonth(cursor);
     const segmentEnd = monthEnd > target ? target : monthEnd;
     txns.forEach((t) => {
       balance += sumInRange(t, cursor, segmentEnd);
     });
+    if (monthEnd > todayMonthEnd && monthEnd <= target && monthlyRate) {
+      balance *= 1 + monthlyRate;
+    }
     if (monthEnd >= target) break;
-    if (monthlyRate) balance *= 1 + monthlyRate;
     cursor = addDays(monthEnd, 1);
   }
   return balance;
@@ -134,13 +137,55 @@ export const monthlyProjection = (accounts, transactions, months = 12) => {
 export const totalBalanceAt = (accounts, transactions, date) =>
   accounts.reduce((acc, a) => acc + balanceAt(a, transactions, date), 0);
 
-const gbp = new Intl.NumberFormat('en-GB', {
-  style: 'currency',
-  currency: 'GBP',
+// Forecast points for the chart: index 0 = today; 1..horizon = subsequent month-ends.
+export const buildForecast = (accounts, transactions, horizon = 12) => {
+  const today = toDate(new Date());
+  const points = [];
+  const pushPoint = (date) => {
+    const balances = {};
+    let total = 0;
+    accounts.forEach((a) => {
+      const b = balanceAt(a, transactions, date);
+      balances[a.id] = b;
+      total += b;
+    });
+    points.push({ date, balances, total });
+  };
+
+  pushPoint(today);
+  for (let i = 1; i <= horizon; i += 1) {
+    const target = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
+    pushPoint(target);
+  }
+  return points;
+};
+
+const gbpNumber = new Intl.NumberFormat('en-GB', {
+  minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-export const formatCurrency = (n) => gbp.format(Number(n) || 0);
+export const formatCurrency = (n) => {
+  const v = Number(n) || 0;
+  if (v < 0) return `−£${gbpNumber.format(Math.abs(v))}`;
+  return `£${gbpNumber.format(v)}`;
+};
+
+export const formatSigned = (n) => {
+  const v = Number(n) || 0;
+  const abs = gbpNumber.format(Math.abs(v));
+  if (v > 0) return `+£${abs}`;
+  if (v < 0) return `−£${abs}`;
+  return `£${abs}`;
+};
+
+export const formatShort = (n) => {
+  const v = Number(n) || 0;
+  const abs = Math.abs(v);
+  const sign = v < 0 ? '−' : '';
+  if (abs >= 1000) return `${sign}£${(abs / 1000).toFixed(1)}k`;
+  return `${sign}£${abs.toFixed(0)}`;
+};
 
 export const buildTransferPair = ({ amount, description, recurrence, startDate, endDate, fromAccountId, toAccountId }) => {
   const transferId = `tr-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
