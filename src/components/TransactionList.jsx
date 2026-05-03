@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCurrency, signedAmount } from '../utils/recurrence';
+import { formatCurrency } from '../utils/recurrence';
 
 const recurrenceLabel = (txn) => {
   if (!txn.recurrence || txn.recurrence === 'none') return 'One-off';
@@ -7,22 +7,18 @@ const recurrenceLabel = (txn) => {
   return txn.endDate ? `${cap} until ${txn.endDate}` : cap;
 };
 
+const iconText = (type) =>
+  type === 'income' ? 'IN' : type === 'expense' ? 'EX' : 'TR';
+
 const TransactionList = ({
+  num,
+  title,
+  subtitle,
   transactions,
   accountsById,
   onDelete,
-  title = 'All transactions',
   emptyHint,
 }) => {
-  if (!transactions.length) {
-    return (
-      <div className="txn-list">
-        <h3>{title}</h3>
-        <p className="muted">{emptyHint || 'Nothing here yet.'}</p>
-      </div>
-    );
-  }
-
   const seen = new Set();
   const rows = [];
   transactions.forEach((txn) => {
@@ -45,65 +41,83 @@ const TransactionList = ({
   });
 
   return (
-    <div className="txn-list">
-      <h3>{title}</h3>
-      <ul>
-        {rows.map((row) => {
+    <div className="card card-pad">
+      <div className="section-head">
+        <h2>
+          <span className="num">§ {num}</span>
+          {title}
+        </h2>
+        <div className="meta">
+          {transactions.length} entries{subtitle ? ` · ${subtitle}` : ''}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="empty-state">
+          {emptyHint || 'No entries yet. The page is blank.'}
+        </div>
+      ) : (
+        rows.map((row) => {
           if (row.kind === 'transfer') {
             const fromName = accountsById[row.out.accountId]?.name ?? '?';
             const toName = accountsById[row.in.accountId]?.name ?? '?';
             return (
-              <li key={row.out.transferId} className="txn transfer">
-                <div className="txn-main">
-                  <span className="txn-desc">{row.out.description}</span>
-                  <span className="txn-meta">
-                    {recurrenceLabel(row.out)} · {fromName} → {toName}
+              <div className="txn transfer" key={row.out.transferId}>
+                <div className="icon">TR</div>
+                <div className="desc">
+                  {row.out.description}
+                  <span className="meta">
+                    {recurrenceLabel(row.out)} · {fromName} → {toName} ·
+                    {' '}{row.out.recurrence === 'none' ? '' : 'starts '}{row.out.startDate}
                   </span>
                 </div>
-                <div className="txn-right">
-                  <span className="txn-amount">{formatCurrency(row.out.amount)}</span>
-                  {onDelete && (
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => onDelete(row.out.transferId, true)}
-                      aria-label={`Delete transfer ${row.out.description}`}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </li>
-            );
-          }
-          const txn = row.txn;
-          const accountName = accountsById[txn.accountId]?.name;
-          return (
-            <li key={txn.id} className={`txn ${txn.type}`}>
-              <div className="txn-main">
-                <span className="txn-desc">{txn.description}</span>
-                <span className="txn-meta">
-                  {recurrenceLabel(txn)}
-                  {accountName ? ` · ${accountName}` : ''} · starts {txn.startDate}
-                </span>
-              </div>
-              <div className="txn-right">
-                <span className="txn-amount">{formatCurrency(signedAmount(txn))}</span>
+                <div className="amt">⇄ £{Number(row.out.amount).toFixed(2)}</div>
                 {onDelete && (
                   <button
                     type="button"
-                    className="ghost"
-                    onClick={() => onDelete(txn.id, false)}
-                    aria-label={`Delete ${txn.description}`}
+                    className="x"
+                    onClick={() => onDelete(row.out.transferId, true)}
+                    aria-label={`Delete transfer ${row.out.description}`}
                   >
                     ×
                   </button>
                 )}
               </div>
-            </li>
+            );
+          }
+
+          const txn = row.txn;
+          const accountName = accountsById[txn.accountId]?.name ?? '';
+          const sign = txn.type === 'income' ? '+' : '−';
+          return (
+            <div className={`txn ${txn.type}`} key={txn.id}>
+              <div className="icon">{iconText(txn.type)}</div>
+              <div className="desc">
+                {txn.description}
+                <span className="meta">
+                  {recurrenceLabel(txn)}
+                  {accountName ? ` · ${accountName}` : ''} ·
+                  {' '}{txn.recurrence === 'none' ? '' : 'starts '}{txn.startDate}
+                </span>
+              </div>
+              <div className="amt">
+                {sign}
+                {formatCurrency(Number(txn.amount)).replace('£', '£').replace('−', '')}
+              </div>
+              {onDelete && (
+                <button
+                  type="button"
+                  className="x"
+                  onClick={() => onDelete(txn.id, false)}
+                  aria-label={`Delete ${txn.description}`}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           );
-        })}
-      </ul>
+        })
+      )}
     </div>
   );
 };

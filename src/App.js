@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
-import Balance from './components/Balance';
+import Headline from './components/Headline';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
 import Projection from './components/Projection';
@@ -9,6 +9,10 @@ import { balanceAt, totalBalanceAt } from './utils/recurrence';
 
 const STORAGE_KEY = 'finance-tracker:v2';
 const LEGACY_KEY = 'finance-tracker:v1';
+const THEME_KEY = 'finance-tracker:theme';
+
+const HORIZON_MONTHS = 12;
+const THEMES = ['ledger', 'midnight', 'emerald'];
 
 const defaultAccount = () => ({
   id: 'acc-spending',
@@ -41,6 +45,9 @@ const App = () => {
     initial?.accounts ?? [defaultAccount()]
   );
   const [transactions, setTransactions] = useState(initial?.transactions ?? []);
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem(THEME_KEY) || 'ledger'
+  );
 
   useEffect(() => {
     localStorage.setItem(
@@ -49,10 +56,14 @@ const App = () => {
     );
   }, [accounts, transactions]);
 
+  useEffect(() => {
+    document.body.className = `theme-${theme}`;
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
   const today = useMemo(() => new Date(), []);
-  const oneYearOut = useMemo(() => {
-    const d = new Date(today);
-    d.setFullYear(d.getFullYear() + 1);
+  const horizonDate = useMemo(() => {
+    const d = new Date(today.getFullYear(), today.getMonth() + HORIZON_MONTHS + 1, 0);
     return d;
   }, [today]);
 
@@ -72,9 +83,9 @@ const App = () => {
     () => totalBalanceAt(accounts, transactions, today),
     [accounts, transactions, today]
   );
-  const totalInYear = useMemo(
-    () => totalBalanceAt(accounts, transactions, oneYearOut),
-    [accounts, transactions, oneYearOut]
+  const totalInHorizon = useMemo(
+    () => totalBalanceAt(accounts, transactions, horizonDate),
+    [accounts, transactions, horizonDate]
   );
 
   const recurring = transactions.filter(
@@ -103,30 +114,53 @@ const App = () => {
   const deleteAccount = (id) => {
     if (accounts.length <= 1) return;
     setAccounts((prev) => prev.filter((a) => a.id !== id));
-    setTransactions((prev) => prev.filter((t) => t.accountId !== id));
+    setTransactions((prev) =>
+      prev.filter((t) => t.accountId !== id)
+    );
   };
 
+  const todayStr = today
+    .toLocaleDateString('en-GB', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+    .toUpperCase();
+
   return (
-    <div className="App">
-      <header>
-        <h1>Finance Tracker</h1>
-        <p className="muted">
-          Track recurring income, expenses, and savings — including compound
-          interest — to forecast your net worth through the year.
-        </p>
+    <div className="root">
+      <header className="masthead">
+        <div className="left">
+          <div>Vol. I · No. {HORIZON_MONTHS + 1}</div>
+          <div style={{ marginTop: 4 }}>{todayStr}</div>
+        </div>
+        <div>
+          <h1>The Almanac</h1>
+        </div>
+        <div className="right">
+          <div>Edition · Personal</div>
+          <div style={{ marginTop: 4 }}>Forecast · {HORIZON_MONTHS} months</div>
+        </div>
       </header>
 
-      <Balance
+      <div className="subhead">
+        “A forecast of recurring income, outgoings &amp; savings over a year.”
+      </div>
+
+      <Headline
         totalNow={totalNow}
-        totalInYear={totalInYear}
-        oneYearOut={oneYearOut}
+        totalInHorizon={totalInHorizon}
+        horizonDate={horizonDate}
         accounts={accounts}
         accountBalances={accountBalancesNow}
+        transactions={transactions}
       />
 
-      <section className="grid">
-        <div className="col">
-          <h2>Add transaction</h2>
+      <div className="ornament">— ✦ —</div>
+
+      <div className="grid">
+        <div>
           <TransactionForm
             accounts={accounts}
             onAdd={addTransaction}
@@ -139,29 +173,47 @@ const App = () => {
             onUpdate={updateAccount}
             onDelete={deleteAccount}
           />
+          <TransactionList
+            num="IV"
+            title="Recurring"
+            subtitle="Monthly · automatic"
+            transactions={recurring}
+            accountsById={accountsById}
+            onDelete={deleteTransaction}
+            emptyHint="No recurring entries yet. Add a subscription, salary, or savings transfer."
+          />
         </div>
-        <div className="col">
-          <h2>Forecast</h2>
-          <Projection accounts={accounts} transactions={transactions} />
-        </div>
-      </section>
 
-      <section className="grid">
-        <TransactionList
-          title="Recurring"
-          transactions={recurring}
-          accountsById={accountsById}
-          onDelete={deleteTransaction}
-          emptyHint="Add a subscription, salary, or recurring savings transfer to see forecasts."
-        />
-        <TransactionList
-          title="One-off"
-          transactions={oneOffs}
-          accountsById={accountsById}
-          onDelete={deleteTransaction}
-          emptyHint="One-time entries appear here."
-        />
-      </section>
+        <div>
+          <Projection accounts={accounts} transactions={transactions} />
+          <TransactionList
+            num="V"
+            title="One-off"
+            subtitle="Single dated entries"
+            transactions={oneOffs}
+            accountsById={accountsById}
+            onDelete={deleteTransaction}
+            emptyHint="No one-off entries yet."
+          />
+        </div>
+      </div>
+
+      <footer className="footer">
+        <div>Almanac &amp; Forecaster — Edition MMXXVI</div>
+        <div className="theme-picker">
+          {THEMES.map((t) => (
+            <button
+              type="button"
+              key={t}
+              className={theme === t ? 'active' : ''}
+              onClick={() => setTheme(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <div>All sums in pounds sterling · projections illustrative</div>
+      </footer>
     </div>
   );
 };
