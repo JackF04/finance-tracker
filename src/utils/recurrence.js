@@ -83,9 +83,9 @@ export const balanceAt = (account, allTransactions, date) => {
   for (let i = 0; i < 600; i += 1) {
     const monthEnd = endOfMonth(cursor);
     const segmentEnd = monthEnd > target ? target : monthEnd;
-    txns.forEach((t) => {
-      balance += sumInRange(t, cursor, segmentEnd);
-    });
+    for (let j = 0; j < txns.length; j += 1) {
+      balance += sumInRange(txns[j], cursor, segmentEnd);
+    }
     if (monthEnd > todayMonthEnd && monthEnd <= target && monthlyRate) {
       balance *= 1 + monthlyRate;
     }
